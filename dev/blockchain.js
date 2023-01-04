@@ -1,8 +1,12 @@
-const sha256 = require("sha256");
+import sha256 from "sha256";
+
+const currentNodeUrl = process.argv[3];
 
 function Blockchain() {
   this.chain = [];
   this.pendingTransactions = [];
+  this.currentNodeUrl = currentNodeUrl;
+  this.networkNodes = [];
   this.createNewBlock(100, "0", "0");
 }
 
@@ -55,4 +59,4 @@ Blockchain.prototype.proofOfWork = function (previousBlockHash, currentBlockData
   return nounce;
 };
 
-module.exports = Blockchain;
+export default Blockchain;
