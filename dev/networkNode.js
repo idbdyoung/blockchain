@@ -48,7 +48,6 @@ app.get("/mine", function (req, res) {
     transactions: bitcoin.pendingTransactions,
     index: lastBlock["index"] + 1,
   };
-  console.log(currentBlockData);
   const nounce = bitcoin.proofOfWork(previousBlockHash, currentBlockData);
   const blockHash = bitcoin.hashBlock(previousBlockHash, nounce, currentBlockData);
   const newBlock = bitcoin.createNewBlock(nounce, previousBlockHash, blockHash);
@@ -96,20 +95,25 @@ app.post("/register-and-broadcast-node", function (req, res) {
 
     bitcoin.networkNodes.push(newNodeUrl);
     bitcoin.networkNodes.forEach((networkNodeUrl) => {
-      const promise = fetch(networkNodeUrl + "/register-node", getFetchPostOption({ newNodeUrl }));
+      const promise = fetch(
+        networkNodeUrl + "/register-node",
+        getFetchPostOption({ newNodeUrl })
+      ).catch(() => `${newNodeUrl} 연결 실패`);
       regNodesPromises.push(promise);
     });
 
-    return Promise.all(regNodesPromises).then(() => {
-      fetch(
-        newNodeUrl + "/register-nodes-bulk",
-        getFetchPostOption({
-          allNetworkNodes: [...bitcoin.networkNodes, bitcoin.currentNodeUrl],
-        })
-      ).then(() => {
-        return res.json({ note: "New Node registerd network sucessfully✔️" });
-      });
-    });
+    return Promise.all(regNodesPromises)
+      .then(() => {
+        fetch(
+          newNodeUrl + "/register-nodes-bulk",
+          getFetchPostOption({
+            allNetworkNodes: [...bitcoin.networkNodes, bitcoin.currentNodeUrl],
+          })
+        ).then(() => {
+          return res.json({ note: "New Node registerd network sucessfully✔️" });
+        });
+      })
+      .catch(() => {});
   }
 
   return res.json({ note: "New Node registered failed❌" });
@@ -142,6 +146,45 @@ app.post("/register-nodes-bulk", function (req, res) {
   });
 
   return res.json({ note: "Bulk registration successfully✔️" });
+});
+
+app.get("/consensus", function (req, res) {
+  const promises = [];
+
+  bitcoin.networkNodes.forEach((networkNodeUrl) => {
+    const promise = fetch(networkNodeUrl + "/blockchain", {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    }).then((res) => res.json());
+    promises.push(promise);
+  });
+  Promise.all(promises).then((blockchains) => {
+    const currentChainLength = bitcoin.chain.length;
+    let maxChainLength = currentChainLength;
+    let newLongestChain = null;
+    let newPendingTransaction = null;
+
+    blockchains.forEach((blockchain) => {
+      if (blockchain.chain.length > maxChainLength) {
+        maxChainLength = blockchain.chain.length;
+        newLongestChain = blockchain.chain;
+        newPendingTransaction = blockchain.pendingTransactions;
+      }
+    });
+
+    if (!newLongestChain || (newLongestChain && !bitcoin.chainIsValid(newLongestChain))) {
+      return res.json({
+        note: "Current chain has not beean replaced❌",
+        chain: bitcoin.chain,
+      });
+    }
+    bitcoin.chain = newLongestChain;
+    bitcoin.pendingTransactions = newPendingTransaction;
+
+    return res.json({
+      note: "This chain has been replaced✔️",
+    });
+  });
 });
 
 app.listen(PORT, function () {
