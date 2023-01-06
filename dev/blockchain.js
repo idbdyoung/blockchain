@@ -66,4 +66,40 @@ Blockchain.prototype.proofOfWork = function (previousBlockHash, currentBlockData
   return nounce;
 };
 
+Blockchain.prototype.chainIsValid = function (blockchain) {
+  let validChain = true;
+
+  //제네시스 블록을 확인
+  const genesisBlock = blockchain[0];
+  const correctNounce = genesisBlock["nounce"] === 100;
+  const correctPreviousBlockHash = genesisBlock["previousBlockHash"] === "0";
+  const correctHash = genesisBlock["hash"] === "0";
+
+  if (!correctNounce || !correctPreviousBlockHash || !correctHash) {
+    validChain = false;
+  }
+
+  //제네시스 블록 이상의 블록들을 확인
+  for (let i = 1; i < blockchain.length; i++) {
+    const currentBlock = blockchain[i];
+    const prevBlock = blockchain[i - 1];
+    const blockHash = this.hashBlock(prevBlock["hash"], currentBlock["nounce"], {
+      transactions: currentBlock["transactions"],
+      index: currentBlock["index"],
+    });
+
+    //블록이 작업증명을 통해 등록된 것임을 확인
+    if (blockHash.substring(0, 4) !== "0000") {
+      validChain = false;
+    }
+
+    //블록에 기록된 이전 블록의 해시와 이전 블록의 해시를 비교
+    if (currentBlock["previousBlockHash"] !== prevBlock["hash"]) {
+      validChain = false;
+    }
+  }
+
+  return validChain;
+};
+
 export default Blockchain;
